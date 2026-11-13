@@ -114,8 +114,9 @@ private enum ThumbnailCapture {
     private static func image(for window: SCWindow) async -> CGImage? {
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let config = SCStreamConfiguration()
-        config.width = 520
-        config.height = 340
+        let scale = min(520 / max(1, window.frame.width), 340 / max(1, window.frame.height))
+        config.width = max(1, Int((window.frame.width * scale).rounded()))
+        config.height = max(1, Int((window.frame.height * scale).rounded()))
         config.scalesToFit = true
         config.showsCursor = false
         let windowID = window.windowID

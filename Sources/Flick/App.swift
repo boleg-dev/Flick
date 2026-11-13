@@ -92,6 +92,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(.separator())
 
+        let placement = NSMenuItem(title: "Show Window Size & Position", action: #selector(toggleWindowPlacement), keyEquivalent: "")
+        placement.target = self
+        placement.state = PreviewSettings.showWindowPlacement ? .on : .off
+        menu.addItem(placement)
+
         let login = NSMenuItem(title: "Open at Login", action: #selector(toggleLogin), keyEquivalent: "")
         login.target = self
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
@@ -109,6 +114,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func showWelcomeAction() {
         showWelcome()
+    }
+
+    @objc private func toggleWindowPlacement() {
+        PreviewSettings.showWindowPlacement.toggle()
     }
 
     @objc private func toggleLogin() {

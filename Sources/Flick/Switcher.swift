@@ -27,6 +27,10 @@ final class SwitcherOverlay: SwitchingPresentation {
     func show(items: [WindowItem], selection: Int, onAction: @escaping (SwitchingSession.Action) -> Void) -> Bool {
         let screens = NSScreen.screens
         guard let active = NSScreen.main ?? screens.first else { return false }
+        let screenFrames: [CGRect]? = PreviewSettings.showWindowPlacement ? screens.compactMap {
+            guard let id = $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return nil }
+            return CGDisplayBounds(id.uint32Value)
+        } : nil
         self.items = items
         self.onAction = onAction
         mouseAtShow = NSEvent.mouseLocation
@@ -40,7 +44,7 @@ final class SwitcherOverlay: SwitchingPresentation {
                 stage.onHover = { [weak self] index in self?.hover(index) }
                 stage.onClick = { onAction(.choose($0)) }
                 stage.onScroll = { [weak self] event in self?.scroll(event) }
-                stage.rebuild(items: items, selection: selection, labels: labels(for:))
+                stage.rebuild(items: items, selection: selection, screenFrames: screenFrames, labels: labels(for:))
                 panel.contentView = stage
                 self.stage = stage
             } else {
@@ -244,13 +248,13 @@ final class StageView: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
 
-    func rebuild(items: [WindowItem], selection: Int, labels: (WindowItem) -> (String, String?)) {
+    func rebuild(items: [WindowItem], selection: Int, screenFrames: [CGRect]?, labels: (WindowItem) -> (String, String?)) {
         self.selection = selection
         cards.forEach { $0.removeFromSuperview() }
         cards = items.enumerated().map { index, item in
             let (title, subtitle) = labels(item)
             let card = CardView()
-            card.bind(id: item.id)
+            card.bind(item: item, placement: screenFrames.flatMap { WindowPlacement(window: item.bounds, screens: $0) })
             card.toolTip = subtitle.map { "\(title)\n\($0)" } ?? title
             card.setLabels(title: title, subtitle: subtitle)
             card.setIcon(item.icon)
@@ -415,7 +419,7 @@ final class CardView: NSView {
     private(set) var windowID: CGWindowID = 0
 
     private let imageWell = NSView()
-    private let imageView = FillImageView()
+    private let imageView = WindowPreviewView()
     private let placeholder = NSImageView()
     private let badge = NSImageView()
     private let titleField = NSTextField(labelWithString: "")
@@ -453,18 +457,23 @@ final class CardView: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
 
-    func bind(id: CGWindowID) { windowID = id }
+    func bind(item: WindowItem, placement: WindowPlacement?) {
+        windowID = item.id
+        imageView.placement = placement
+        setImage(nil)
+    }
 
     func setIcon(_ image: NSImage) {
         placeholder.image = image
+        imageView.fallbackIcon = image
         badge.image = image
     }
 
     func setImage(_ image: NSImage?) {
         imageView.image = image
         let hasImage = image != nil
-        imageView.isHidden = !hasImage
-        placeholder.isHidden = hasImage
+        imageView.isHidden = !hasImage && imageView.placement == nil
+        placeholder.isHidden = hasImage || imageView.placement != nil
         badge.isHidden = !hasImage
     }
 
@@ -560,24 +569,48 @@ final class CardView: NSView {
     }
 }
 
-final class FillImageView: NSView {
-    var image: NSImage? {
-        didSet { needsDisplay = true }
-    }
+final class WindowPreviewView: NSView {
+    var image: NSImage? { didSet { needsDisplay = true } }
+    var placement: WindowPlacement? { didSet { needsDisplay = true } }
+    var fallbackIcon: NSImage? { didSet { needsDisplay = true } }
 
     override var isOpaque: Bool { false }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard let image, image.size.width > 0, image.size.height > 0 else { return }
-        let scale = max(bounds.width / image.size.width, bounds.height / image.size.height)
-        let width = image.size.width * scale
-        let height = image.size.height * scale
-        let dest = NSRect(
-            x: (bounds.width - width) / 2,
-            y: (bounds.height - height) / 2,
-            width: width,
-            height: height
-        )
-        image.draw(in: dest, from: NSRect(origin: .zero, size: image.size), operation: .sourceOver, fraction: 1)
+        if let placement {
+            drawPlacement(placement)
+        } else if let image, image.size.width > 0, image.size.height > 0 {
+            let scale = max(bounds.width / image.size.width, bounds.height / image.size.height)
+            let size = NSSize(width: image.size.width * scale, height: image.size.height * scale)
+            image.draw(in: NSRect(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2,
+                                 width: size.width, height: size.height))
+        }
+    }
+
+    private func drawPlacement(_ placement: WindowPlacement) {
+        guard bounds.width > 12, bounds.height > 12 else { return }
+        let frames = placement.frames(in: bounds.insetBy(dx: 6, dy: 6))
+        let screenPath = NSBezierPath(roundedRect: frames.screen, xRadius: 3, yRadius: 3)
+        NSColor.black.withAlphaComponent(0.35).setFill()
+        screenPath.fill()
+        NSGraphicsContext.saveGraphicsState()
+        screenPath.addClip()
+        NSColor.white.withAlphaComponent(0.12).setFill()
+        frames.window.fill()
+        if let image {
+            image.draw(in: frames.window)
+        } else if let icon = fallbackIcon {
+            let side = min(32, min(frames.window.width, frames.window.height) * 0.65)
+            icon.draw(in: NSRect(x: frames.window.midX - side / 2, y: frames.window.midY - side / 2,
+                                width: side, height: side))
+        }
+        NSColor.white.withAlphaComponent(0.35).setStroke()
+        let windowPath = NSBezierPath(rect: frames.window.insetBy(dx: 0.5, dy: 0.5))
+        windowPath.lineWidth = 1
+        windowPath.stroke()
+        NSGraphicsContext.restoreGraphicsState()
+        NSColor.white.withAlphaComponent(0.18).setStroke()
+        screenPath.lineWidth = 1
+        screenPath.stroke()
     }
 }

@@ -4,6 +4,12 @@ A small window switcher for the Mac. No account.
 
 Hold **Option** and press **Tab**. Release Option on the window you want. Escape stays put. **Option-`** cycles windows in the current app. Arrows, click, and two-finger scroll work while it is open.
 
+## Preview position
+
+Enable **Show Window Size & Position** in Flick's menu to place each window preview inside a miniature of its screen. Small windows stay small and keep their screen position. For windows spanning displays, Flick uses the display containing the largest part of the window and clips the overflow.
+
+The option is off by default, is remembered across restarts, and takes effect the next time you open the switcher. Turn it off to return to filled previews. No additional screen capture permission is required.
+
 ## Build
 
 ```sh
