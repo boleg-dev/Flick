@@ -15,6 +15,7 @@ let package = Package(
                 .linkedFramework("ScreenCaptureKit"),
                 .linkedFramework("ServiceManagement"),
             ]
-        )
+        ),
+        .testTarget(name: "FlickTests", dependencies: ["Flick"])
     ]
 )

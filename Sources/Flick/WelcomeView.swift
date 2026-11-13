@@ -128,5 +128,4 @@ final class PermissionModel: ObservableObject {
     @Published var screenRecording = false
     @Published var shortcutReady = false
     @Published var altTabRunning = false
-    @Published var menuBarHidden = false
 }

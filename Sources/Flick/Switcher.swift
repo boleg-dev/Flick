@@ -15,138 +15,66 @@ enum Metrics {
     static var cardH: CGFloat { thumbH + textGap + textH }
 }
 
-final class SwitcherController {
-    var sessionEnded: (() -> Void)?
-
-    private(set) var isVisible = false
+final class SwitcherOverlay: SwitchingPresentation {
     private var items: [WindowItem] = []
-    private var selection = 0
     private var panels: [OverlayPanel] = []
     private var stage: StageView?
-    private var thumbnailTask: Task<Void, Never>?
-    private var cache: [CGWindowID: NSImage] = [:]
+    private let previews = WindowPreviews()
+    private var onAction: ((SwitchingSession.Action) -> Void)?
     private var scrollBucket: CGFloat = 0
     private var mouseAtShow = NSPoint.zero
-    private var lastMove = Date.distantPast
-    private var focusGeneration = 0
 
-    func present(scope: SwitchScope, direction: Int) {
-        guard !isVisible else { return }
-        focusGeneration += 1
-
-        let all = WindowLister.onScreen()
-        let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        switch scope {
-        case .all:
-            items = all
-        case .currentApp:
-            let same = all.filter { $0.pid == frontPID }
-            items = same.isEmpty ? all : same
-        }
-
-        let focusedIsFirst = items.first?.pid == frontPID
-        selection = WindowLister.initialIndex(
-            count: items.count,
-            direction: direction,
-            focusedIsFirst: focusedIsFirst
-        )
+    func show(items: [WindowItem], selection: Int, onAction: @escaping (SwitchingSession.Action) -> Void) -> Bool {
+        let screens = NSScreen.screens
+        guard let active = NSScreen.main ?? screens.first else { return false }
+        self.items = items
+        self.onAction = onAction
         mouseAtShow = NSEvent.mouseLocation
         scrollBucket = 0
-        lastMove = .distantPast
-        seedFlickPreviews()
-        show()
-        loadThumbnails()
-    }
-
-    func cycle(_ direction: Int) {
-        guard isVisible, items.count > 1, direction != 0 else { return }
-        selection = (selection + direction) % items.count
-        if selection < 0 { selection += items.count }
-        let animated = Date().timeIntervalSince(lastMove) > 0.07
-        lastMove = Date()
-        stage?.setSelection(selection, animated: animated)
-    }
-
-    func confirm() {
-        guard isVisible else { return }
-        let chosen = items.indices.contains(selection) ? items[selection] : nil
-        focusGeneration += 1
-        let generation = focusGeneration
-        dismiss()
-        guard let chosen else { return }
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.focusGeneration == generation, !self.isVisible else { return }
-            WindowFocus.focus(chosen)
-        }
-    }
-
-    func cancel() {
-        guard isVisible else { return }
-        focusGeneration += 1
-        dismiss()
-    }
-
-    private func dismiss() {
-        isVisible = false
-        thumbnailTask?.cancel()
-        thumbnailTask = nil
-        panels.forEach { $0.orderOut(nil) }
-        panels.removeAll()
-        stage = nil
-        sessionEnded?()
-    }
-
-    private func show() {
-        let screens = NSScreen.screens
-        guard let active = NSScreen.main ?? screens.first else {
-            sessionEnded?()
-            return
-        }
 
         for screen in screens {
             let panel = OverlayPanel(frame: screen.frame)
             if screen.frame == active.frame {
                 let stage = StageView()
-                stage.onBackground = { [weak self] in self?.cancel() }
+                stage.onBackground = { onAction(.cancel) }
                 stage.onHover = { [weak self] index in self?.hover(index) }
-                stage.onClick = { [weak self] index in self?.click(index) }
+                stage.onClick = { onAction(.choose($0)) }
                 stage.onScroll = { [weak self] event in self?.scroll(event) }
                 stage.rebuild(items: items, selection: selection, labels: labels(for:))
-                for item in items {
-                    if let image = cache[item.id] {
-                        stage.setImage(image, for: item.id)
-                    }
-                }
                 panel.contentView = stage
                 self.stage = stage
             } else {
                 let dim = DimView()
-                dim.onMouseDown = { [weak self] in self?.cancel() }
+                dim.onMouseDown = { onAction(.cancel) }
                 panel.contentView = dim
             }
-            panel.orderFrontRegardless()
             panels.append(panel)
         }
-
-        isVisible = true
+        previews.start(items: items, selection: selection) { [weak self] in self?.apply($0) }
+        panels.forEach { $0.orderFrontRegardless() }
         stage?.window?.makeKey()
         stage?.needsLayout = true
         stage?.layoutSubtreeIfNeeded()
+        return true
+    }
+
+    func select(_ index: Int, animated: Bool) {
+        stage?.setSelection(index, animated: animated)
+    }
+
+    func dismiss() {
+        previews.cancel()
+        panels.forEach { $0.orderOut(nil) }
+        panels.removeAll()
+        stage = nil
+        onAction = nil
+        items = []
     }
 
     private func hover(_ index: Int) {
         let mouse = NSEvent.mouseLocation
         guard hypot(mouse.x - mouseAtShow.x, mouse.y - mouseAtShow.y) > 4 else { return }
-        guard index != selection else { return }
-        selection = index
-        lastMove = Date()
-        stage?.setSelection(index, animated: true)
-    }
-
-    private func click(_ index: Int) {
-        selection = index
-        stage?.setSelection(index, animated: false)
-        confirm()
+        onAction?(.hover(index))
     }
 
     private func scroll(_ event: NSEvent) {
@@ -161,64 +89,31 @@ final class SwitcherController {
         let threshold: CGFloat = event.hasPreciseScrollingDeltas ? 32 : 2
         while scrollBucket <= -threshold {
             scrollBucket += threshold
-            cycle(1)
+            onAction?(.cycle(1))
         }
         while scrollBucket >= threshold {
             scrollBucket -= threshold
-            cycle(-1)
+            onAction?(.cycle(-1))
         }
     }
 
-    private func seedFlickPreviews() {
-        let own = ProcessInfo.processInfo.processIdentifier
-        for item in items where item.pid == own {
-            if let image = WindowPreview.image(windowID: item.id) {
-                cache[item.id] = image
-            }
-        }
-    }
-
-    private func loadThumbnails() {
-        thumbnailTask?.cancel()
-        guard !items.isEmpty else { return }
-        var ordered = items
-        if items.indices.contains(selection) {
-            ordered = Array(items[selection...]) + Array(items[..<selection])
-        }
-        let own = ProcessInfo.processInfo.processIdentifier
-        let ids = ordered.filter { $0.pid != own }.map(\.id)
-        thumbnailTask = Task { [weak self] in
-            for await shot in ThumbnailService.capture(ids: ids) {
-                if Task.isCancelled { return }
-                await MainActor.run { [weak self] in
-                    guard let self, self.isVisible else { return }
-                    self.apply(shot)
-                }
-            }
-        }
-    }
-
-    private func apply(_ shot: ThumbnailService.Shot) {
-        if !shot.titles.isEmpty {
+    private func apply(_ update: WindowPreviews.Update) {
+        switch update {
+        case .titles(let titles):
             var changed = false
-            for (id, title) in shot.titles {
-                guard let index = items.firstIndex(where: { $0.id == id }) else { continue }
-                if items[index].title != title {
+            for index in items.indices {
+                if let title = titles[items[index].id], title != items[index].title {
                     items[index].title = title
                     changed = true
                 }
             }
-            if changed {
-                for item in items {
-                    let (title, subtitle) = labels(for: item)
-                    stage?.setLabels(title: title, subtitle: subtitle, for: item.id)
-                }
+            guard changed else { return }
+            onAction?(.titles(titles))
+            for item in items {
+                let (title, subtitle) = labels(for: item)
+                stage?.setLabels(title: title, subtitle: subtitle, for: item.id)
             }
-        }
-        if let (id, cgImage) = shot.image {
-            let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-            if cache.count > 48 { cache.removeAll() }
-            cache[id] = image
+        case .image(let id, let image):
             stage?.setImage(image, for: id)
         }
     }
@@ -525,7 +420,6 @@ final class CardView: NSView {
     private let badge = NSImageView()
     private let titleField = NSTextField(labelWithString: "")
     private let subtitleField = NSTextField(labelWithString: "")
-    private var icon = NSImage()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -562,7 +456,6 @@ final class CardView: NSView {
     func bind(id: CGWindowID) { windowID = id }
 
     func setIcon(_ image: NSImage) {
-        icon = image
         placeholder.image = image
         badge.image = image
     }

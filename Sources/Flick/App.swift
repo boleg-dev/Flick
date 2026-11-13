@@ -17,31 +17,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     static let shared = AppDelegate()
 
     private let permissions = PermissionModel()
-    private let hotkeys = HotkeyMonitor()
-    private let switcher = SwitcherController()
+    private let session = SwitchingSession(presentation: SwitcherOverlay())
+    private lazy var hotkeys = HotkeyMonitor { [weak self] in self?.session.handle($0) ?? false }
     private var statusItem: NSStatusItem?
-    private var menu: NSMenu?
+    private var iconHasAccessibility: Bool?
     private var welcome: NSWindow?
     private var timer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installMainMenu()
-        hotkeys.open = { [weak self] scope, direction in
-            self?.switcher.present(scope: scope, direction: direction)
-        }
-        hotkeys.cycle = { [weak self] direction in
-            self?.switcher.cycle(direction)
-        }
-        hotkeys.confirm = { [weak self] in
-            self?.switcher.confirm()
-        }
-        hotkeys.cancel = { [weak self] in
-            self?.switcher.cancel()
-        }
-        switcher.sessionEnded = { [weak self] in
-            self?.hotkeys.endSession()
-        }
-
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.autosaveName = "Flick"
         item.isVisible = true
@@ -49,7 +33,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         item.menu = menu
         statusItem = item
-        self.menu = menu
         if let button = item.button {
             button.imagePosition = .imageOnly
             button.title = ""
@@ -64,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
             guard let self else { return }
             self.refreshPermissions()
-            if self.permissions.menuBarHidden {
+            if !self.statusItemIsOnMenuBar() {
                 self.showWelcome()
             }
         }
@@ -121,7 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func showWindows() {
-        hotkeys.openFromMenu()
+        session.openFromMenu()
     }
 
     @objc private func showWelcomeAction() {
@@ -149,7 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             model: permissions,
             onAccessibility: { SystemSettings.revealAccessibility() },
             onScreenRecording: { SystemSettings.revealScreenRecording() },
-            onPreview: { [weak self] in self?.hotkeys.openFromMenu() }
+            onPreview: { [weak self] in self?.session.openFromMenu() }
         )
         let hosting = NSHostingController(rootView: root)
         hosting.sizingOptions = .preferredContentSize
@@ -197,7 +180,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         permissions.shortcutReady = hotkeys.isInstalled
         updateStatusIcon()
-        permissions.menuBarHidden = !statusItemIsOnMenuBar()
     }
 
     private func statusItemIsOnMenuBar() -> Bool {
@@ -218,6 +200,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func updateStatusIcon() {
+        guard iconHasAccessibility != permissions.accessibility else { return }
+        iconHasAccessibility = permissions.accessibility
         let symbol = permissions.accessibility ? "square.on.square" : "exclamationmark.square"
         let base = NSImage(systemSymbolName: symbol, accessibilityDescription: "Flick")
         let image = base?.withSymbolConfiguration(.init(pointSize: 13, weight: .medium)) ?? base

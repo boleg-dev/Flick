@@ -68,14 +68,6 @@ enum WindowLister {
         return items
     }
 
-    /// When the focused app is the first listed window, step off it.
-    /// Opening the switcher from a menu leaves Flick in front only when it has no window,
-    /// so the first remaining window is already the one to land on.
-    static func initialIndex(count: Int, direction: Int, focusedIsFirst: Bool) -> Int {
-        guard count > 1, direction != 0, focusedIsFirst else { return 0 }
-        return direction > 0 ? 1 : count - 1
-    }
-
     private static func number(_ key: CFString, in entry: [String: Any]) -> Int? {
         let value = entry[key as String]
         if let number = value as? Int { return number }
@@ -113,20 +105,6 @@ enum WindowLister {
             return nil
         }
         return CGRect(x: x, y: y, width: width, height: height)
-    }
-}
-
-enum WindowPreview {
-    /// Grab Flick's own window before the switcher covers it. ScreenCaptureKit often
-    /// returns the overlay instead of this window.
-    static func image(windowID: CGWindowID) -> NSImage? {
-        guard let image = CGWindowListCreateImage(
-            .null,
-            .optionIncludingWindow,
-            windowID,
-            [.boundsIgnoreFraming, .bestResolution]
-        ) else { return nil }
-        return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
     }
 }
 
