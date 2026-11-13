@@ -73,7 +73,7 @@ private enum ThumbnailCapture {
     static func capture(ids: [CGWindowID]) -> AsyncStream<WindowPreviews.Update> {
         AsyncStream { continuation in
             let task = Task { @MainActor in
-                guard CGPreflightScreenCaptureAccess(), !ids.isEmpty else {
+                guard !Task.isCancelled, !ids.isEmpty, CGPreflightScreenCaptureAccess() else {
                     continuation.finish()
                     return
                 }
@@ -86,9 +86,14 @@ private enum ThumbnailCapture {
                     return
                 }
 
+                guard !Task.isCancelled else {
+                    continuation.finish()
+                    return
+                }
+                let requested = Set(ids)
                 var titles: [CGWindowID: String] = [:]
                 var windows: [CGWindowID: SCWindow] = [:]
-                for window in content.windows {
+                for window in content.windows where requested.contains(window.windowID) {
                     windows[window.windowID] = window
                     if let title = window.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
                         titles[window.windowID] = title
@@ -101,7 +106,7 @@ private enum ThumbnailCapture {
                 for id in ids {
                     if Task.isCancelled { break }
                     guard let window = windows[id] else { continue }
-                    if let image = await image(for: window) {
+                    if let image = await image(for: window), !Task.isCancelled {
                         continuation.yield(.image(id, NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))))
                     }
                 }

@@ -13,7 +13,7 @@ enum FlickMain {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
     static let shared = AppDelegate()
 
     private let permissions = PermissionModel()
@@ -22,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private var iconHasAccessibility: Bool?
     private var welcome: NSWindow?
-    private var timer: Timer?
+    private var setupTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installMainMenu()
@@ -52,13 +52,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
 
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.refreshPermissions()
-        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        timer?.invalidate()
+        setupTimer?.invalidate()
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        refreshPermissions()
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        stopSetupPolling()
+    }
+
+    func windowDidMiniaturize(_ notification: Notification) {
+        stopSetupPolling()
+    }
+
+    func windowDidDeminiaturize(_ notification: Notification) {
+        refreshPermissions()
     }
 
     func menuWillOpen(_ menu: NSMenu) {
@@ -137,6 +150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func showWelcome() {
+        refreshPermissions()
         let root = WelcomeView(
             model: permissions,
             onAccessibility: { SystemSettings.revealAccessibility() },
@@ -157,6 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 backing: .buffered,
                 defer: false
             )
+            window.delegate = self
             window.title = "Flick"
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
@@ -168,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         window.center()
         window.makeKeyAndOrderFront(nil)
+        updateSetupPolling()
         NSApp.activate(ignoringOtherApps: true)
         DispatchQueue.main.async {
             let fit = hosting.view.fittingSize
@@ -179,16 +195,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func refreshPermissions() {
-        permissions.accessibility = AXIsProcessTrusted()
-        permissions.screenRecording = CGPreflightScreenCaptureAccess()
-        permissions.altTabRunning = NSWorkspace.shared.runningApplications.contains {
+        let accessibility = AXIsProcessTrusted()
+        let screenRecording = CGPreflightScreenCaptureAccess()
+        let altTabRunning = NSWorkspace.shared.runningApplications.contains {
             $0.bundleIdentifier == "com.lwouis.alt-tab-macos"
         }
+        if permissions.accessibility != accessibility { permissions.accessibility = accessibility }
+        if permissions.screenRecording != screenRecording { permissions.screenRecording = screenRecording }
+        if permissions.altTabRunning != altTabRunning { permissions.altTabRunning = altTabRunning }
         if permissions.accessibility {
             hotkeys.start()
         }
-        permissions.shortcutReady = hotkeys.isInstalled
+        if permissions.shortcutReady != hotkeys.isInstalled { permissions.shortcutReady = hotkeys.isInstalled }
         updateStatusIcon()
+        updateSetupPolling()
+    }
+
+    private func updateSetupPolling() {
+        let needsSetup = !permissions.accessibility || !permissions.screenRecording || !permissions.shortcutReady
+        guard welcome?.isVisible == true, welcome?.isMiniaturized == false, needsSetup else {
+            stopSetupPolling()
+            return
+        }
+        guard setupTimer == nil else { return }
+        let timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            self?.refreshPermissions()
+        }
+        timer.tolerance = 0.5
+        setupTimer = timer
+    }
+
+    private func stopSetupPolling() {
+        setupTimer?.invalidate()
+        setupTimer = nil
     }
 
     private func statusItemIsOnMenuBar() -> Bool {

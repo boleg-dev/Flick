@@ -251,13 +251,17 @@ final class StageView: NSView {
     func rebuild(items: [WindowItem], selection: Int, screenFrames: [CGRect]?, labels: (WindowItem) -> (String, String?)) {
         self.selection = selection
         cards.forEach { $0.removeFromSuperview() }
+        var icons: [pid_t: NSImage] = [:]
         cards = items.enumerated().map { index, item in
             let (title, subtitle) = labels(item)
             let card = CardView()
             card.bind(item: item, placement: screenFrames.flatMap { WindowPlacement(window: item.bounds, screens: $0) })
             card.toolTip = subtitle.map { "\(title)\n\($0)" } ?? title
             card.setLabels(title: title, subtitle: subtitle)
-            card.setIcon(item.icon)
+            let icon = icons[item.pid] ?? item.icon
+            icons[item.pid] = icon
+            card.setIcon(icon)
+            card.setSelected(index == selection, animated: false)
             card.onHover = { [weak self] in self?.onHover?(index) }
             card.onClick = { [weak self] in self?.onClick?(index) }
             card.onScroll = { [weak self] event in self?.onScroll?(event) }
@@ -266,15 +270,15 @@ final class StageView: NSView {
         }
         hint.stringValue = items.isEmpty ? "No windows" : "Release ⌥ to switch    ·    esc cancels"
         laidOutWidth = -1
-        setSelection(selection, animated: false)
+        layoutStrip(animated: false)
         needsLayout = true
     }
 
     func setSelection(_ index: Int, animated: Bool) {
+        guard selection != index else { return }
+        if cards.indices.contains(selection) { cards[selection].setSelected(false, animated: animated) }
         selection = index
-        for (cardIndex, card) in cards.enumerated() {
-            card.setSelected(cardIndex == index, animated: animated)
-        }
+        if cards.indices.contains(index) { cards[index].setSelected(true, animated: animated) }
         layoutStrip(animated: animated && laidOutWidth > 0)
     }
 
