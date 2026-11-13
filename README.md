@@ -118,6 +118,6 @@ On macOS Tahoe, check **System Settings → Menu Bar → Allow in the Menu Bar �
 
 </details>
 
-## Follow along
+## Support Flick
 
-If Flick earns a place in your menu bar, give the repository a star. Follow [@boleg-dev](https://github.com/boleg-dev) for more projects and updates.
+If Flick earns a place in your menu bar, you can [buy me a coffee](https://buymeacoffee.com/boleg) to support its development.
