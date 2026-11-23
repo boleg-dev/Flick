@@ -59,7 +59,7 @@ final class SwitchingSession {
     func handle(_ input: Input) -> Bool {
         let option = input.flags.contains(.maskAlternate)
         let interrupted = input.flags.contains(.maskCommand) || input.flags.contains(.maskControl)
-        if input.key == nil {
+        guard let key = input.key else {
             if let run = accepting {
                 if interrupted { finish(run, confirm: false) }
                 else if optionDown && !option { finish(run, confirm: true) }
@@ -67,7 +67,6 @@ final class SwitchingSession {
             optionDown = option
             return false
         }
-        guard let key = input.key else { return false }
         if let run = accepting {
             if interrupted {
                 finish(run, confirm: false)
@@ -164,7 +163,7 @@ final class SwitchingSession {
     }
 }
 
-private enum Key {
+enum Key {
     static let tab: CGKeyCode = 48
     static let grave: CGKeyCode = 50
     static let escape: CGKeyCode = 53

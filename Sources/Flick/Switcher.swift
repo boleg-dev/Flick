@@ -256,7 +256,6 @@ final class StageView: NSView {
             let (title, subtitle) = labels(item)
             let card = CardView()
             card.bind(item: item, placement: screenFrames.flatMap { WindowPlacement(window: item.bounds, screens: $0) })
-            card.toolTip = subtitle.map { "\(title)\n\($0)" } ?? title
             card.setLabels(title: title, subtitle: subtitle)
             let icon = icons[item.pid] ?? item.icon
             icons[item.pid] = icon
@@ -289,7 +288,6 @@ final class StageView: NSView {
     func setLabels(title: String, subtitle: String?, for id: CGWindowID) {
         guard let card = cards.first(where: { $0.windowID == id }) else { return }
         card.setLabels(title: title, subtitle: subtitle)
-        card.toolTip = subtitle.map { "\(title)\n\($0)" } ?? title
     }
 
     override func viewDidMoveToWindow() {
@@ -436,7 +434,7 @@ final class CardView: NSView {
         imageWell.layer?.masksToBounds = true
         imageWell.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.06).cgColor
         imageWell.layer?.borderWidth = 1
-        imageWell.layer?.borderColor = NSColor.white.withAlphaComponent(0.16).cgColor
+        imageWell.layer?.borderColor = borderColor(selected: false)
 
         placeholder.imageScaling = .scaleProportionallyUpOrDown
         badge.imageScaling = .scaleProportionallyUpOrDown
@@ -485,6 +483,7 @@ final class CardView: NSView {
         titleField.stringValue = title
         subtitleField.stringValue = subtitle ?? ""
         subtitleField.isHidden = subtitle == nil
+        toolTip = subtitle.map { "\(title)\n\($0)" } ?? title
         needsLayout = true
     }
 

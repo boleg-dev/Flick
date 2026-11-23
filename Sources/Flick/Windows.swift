@@ -1,7 +1,7 @@
 import AppKit
 import ApplicationServices
 
-struct WindowItem: Identifiable, Equatable {
+struct WindowItem {
     let id: CGWindowID
     let pid: pid_t
     let appName: String
@@ -148,24 +148,17 @@ enum WindowFocus {
         }
 
         let wantedTitle = window.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        var best: (AXUIElement, CGFloat)?
+        var best: (element: AXUIElement, score: CGFloat)?
         for candidate in windows.prefix(16) {
-            let title = axString(candidate, kAXTitleAttribute as CFString)
-            if !wantedTitle.isEmpty, title == wantedTitle, let frame = axFrame(candidate) {
-                let score = distance(frame, window.bounds) - 50
-                if best == nil || score < best!.1 {
-                    best = (candidate, score)
-                }
-                continue
-            }
             guard let frame = axFrame(candidate) else { continue }
-            let score = distance(frame, window.bounds)
-            if best == nil || score < best!.1 {
-                best = (candidate, score)
-            }
+            let title = axString(candidate, kAXTitleAttribute as CFString)
+            let titleBonus: CGFloat = !wantedTitle.isEmpty && title == wantedTitle ? 50 : 0
+            let score = distance(frame, window.bounds) - titleBonus
+            if let best, score >= best.score { continue }
+            best = (candidate, score)
         }
-        guard let best, best.1 < 220 else { return nil }
-        return best.0
+        guard let best, best.score < 220 else { return nil }
+        return best.element
     }
 
     private static func distance(_ frame: CGRect, _ bounds: CGRect) -> CGFloat {
@@ -204,7 +197,9 @@ enum WindowFocus {
 
     private static func axRawValue(_ element: AXUIElement, _ attribute: CFString) -> AXValue? {
         var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success, let value else {
+        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success,
+              let value,
+              CFGetTypeID(value) == AXValueGetTypeID() else {
             return nil
         }
         return (value as! AXValue)

@@ -4,7 +4,7 @@ import XCTest
 final class SwitchingSessionTests: XCTestCase {
     func testQuickReleaseStillPresentsAndConfirmsInOrder() {
         let rig = Rig()
-        XCTAssertTrue(rig.key(48))
+        XCTAssertTrue(rig.key(Key.tab))
         XCTAssertFalse(rig.flags([]))
         XCTAssertTrue(rig.display.shown.isEmpty)
         rig.drain()
@@ -16,9 +16,9 @@ final class SwitchingSessionTests: XCTestCase {
 
     func testRepeatsBeforePresentationCycleAndWrap() {
         let rig = Rig()
-        XCTAssertTrue(rig.key(48))
-        XCTAssertTrue(rig.key(48))
-        XCTAssertTrue(rig.key(48))
+        XCTAssertTrue(rig.key(Key.tab))
+        XCTAssertTrue(rig.key(Key.tab))
+        XCTAssertTrue(rig.key(Key.tab))
         _ = rig.flags([])
         rig.drain()
         XCTAssertEqual(rig.focused.map(\.id), [1])
@@ -26,21 +26,21 @@ final class SwitchingSessionTests: XCTestCase {
 
     func testReopenSuppressesOldFocusWithoutReleasingNewKeyboardCapture() {
         let rig = Rig()
-        _ = rig.key(48)
+        _ = rig.key(Key.tab)
         _ = rig.flags([])
-        _ = rig.key(48)
+        _ = rig.key(Key.tab)
         rig.drain()
         XCTAssertTrue(rig.focused.isEmpty)
-        XCTAssertTrue(rig.key(48))
+        XCTAssertTrue(rig.key(Key.tab))
         _ = rig.flags([])
         rig.drain()
         XCTAssertEqual(rig.focused.map(\.id), [3])
     }
 
     func testEscapeAndModifierInterruptionCancel() {
-        for (key, flags, consumed) in [(UInt16(53), CGEventFlags.maskAlternate, true), (UInt16(0), CGEventFlags.maskCommand, false)] {
+        for (key, flags, consumed) in [(Key.escape, CGEventFlags.maskAlternate, true), (UInt16(0), CGEventFlags.maskCommand, false)] {
             let rig = Rig()
-            _ = rig.key(48)
+            _ = rig.key(Key.tab)
             XCTAssertEqual(rig.key(key, flags: flags), consumed)
             rig.drain()
             XCTAssertTrue(rig.focused.isEmpty)
@@ -48,7 +48,7 @@ final class SwitchingSessionTests: XCTestCase {
             XCTAssertFalse(rig.key(0, flags: []))
         }
         let rig = Rig()
-        _ = rig.key(48)
+        _ = rig.key(Key.tab)
         XCTAssertFalse(rig.flags([.maskAlternate, .maskControl]))
         rig.drain()
         XCTAssertTrue(rig.focused.isEmpty)
@@ -56,7 +56,7 @@ final class SwitchingSessionTests: XCTestCase {
 
     func testPointerDismissalReleasesKeyboardCapture() {
         let rig = Rig()
-        _ = rig.key(48)
+        _ = rig.key(Key.tab)
         rig.drain()
         rig.display.action?(.cancel)
         XCTAssertFalse(rig.key(0, flags: []))
@@ -78,7 +78,7 @@ final class SwitchingSessionTests: XCTestCase {
 
     func testCurrentAppScopeAndReverseSelection() {
         let rig = Rig()
-        _ = rig.key(50, flags: [.maskAlternate, .maskShift])
+        _ = rig.key(Key.grave, flags: [.maskAlternate, .maskShift])
         _ = rig.flags([])
         rig.drain()
         XCTAssertEqual(rig.display.shown, [[1, 3]])
@@ -87,7 +87,7 @@ final class SwitchingSessionTests: XCTestCase {
 
     func testAbsentCurrentAppFallsBackToAllWindows() {
         let rig = Rig(front: 99)
-        _ = rig.key(50)
+        _ = rig.key(Key.grave)
         _ = rig.flags([])
         rig.drain()
         XCTAssertEqual(rig.display.shown, [[1, 2, 3]])
@@ -96,8 +96,8 @@ final class SwitchingSessionTests: XCTestCase {
 
     func testEmptyListCanBeConfirmedWithoutFocus() {
         let rig = Rig(items: [])
-        _ = rig.key(48)
-        _ = rig.key(48)
+        _ = rig.key(Key.tab)
+        _ = rig.key(Key.tab)
         _ = rig.flags([])
         rig.drain()
         XCTAssertEqual(rig.display.dismissals, 1)
@@ -107,7 +107,7 @@ final class SwitchingSessionTests: XCTestCase {
     func testPresentationFailureReleasesCapture() {
         let rig = Rig()
         rig.display.canShow = false
-        _ = rig.key(48)
+        _ = rig.key(Key.tab)
         rig.drain()
         XCTAssertFalse(rig.key(0, flags: []))
         XCTAssertTrue(rig.focused.isEmpty)

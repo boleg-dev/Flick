@@ -35,9 +35,9 @@ card(
 let front = NSRect(x: 314, y: 258, width: 528, height: 368)
 card(front, radius: 46, fill: NSColor(srgbRed: 0.97, green: 0.97, blue: 0.96, alpha: 1))
 
-NSColor(srgbRed: 0.86, green: 0.87, blue: 0.89, alpha: 1).setFill()
-NSBezierPath(roundedRect: NSRect(x: front.minX + 48, y: front.minY + 168, width: 250, height: 26), xRadius: 8, yRadius: 8).fill()
-NSBezierPath(roundedRect: NSRect(x: front.minX + 48, y: front.minY + 122, width: 168, height: 26), xRadius: 8, yRadius: 8).fill()
+let bar = NSColor(srgbRed: 0.86, green: 0.87, blue: 0.89, alpha: 1)
+card(NSRect(x: front.minX + 48, y: front.minY + 168, width: 250, height: 26), radius: 8, fill: bar)
+card(NSRect(x: front.minX + 48, y: front.minY + 122, width: 168, height: 26), radius: 8, fill: bar)
 
 image.unlockFocus()
 
@@ -69,21 +69,17 @@ let sizes: [(String, Int)] = [
     ("icon_512x512@2x.png", 1024),
 ]
 
-let process = Process()
-for (name, pixels) in sizes {
-    let dest = iconset.appendingPathComponent(name)
-    let sips = Process()
-    sips.executableURL = URL(fileURLWithPath: "/usr/bin/sips")
-    sips.arguments = ["-z", "\(pixels)", "\(pixels)", master.path, "--out", dest.path]
-    try sips.run()
-    sips.waitUntilExit()
-    if sips.terminationStatus != 0 { exit(sips.terminationStatus) }
+func run(_ path: String, _ arguments: [String]) throws {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: path)
+    process.arguments = arguments
+    try process.run()
+    process.waitUntilExit()
+    if process.terminationStatus != 0 { exit(process.terminationStatus) }
 }
 
-let iconutil = Process()
-iconutil.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
-iconutil.arguments = ["-c", "icns", iconset.path, "-o", root.appendingPathComponent("AppIcon.icns").path]
-try iconutil.run()
-iconutil.waitUntilExit()
-if iconutil.terminationStatus != 0 { exit(iconutil.terminationStatus) }
-_ = process
+for (name, pixels) in sizes {
+    let dest = iconset.appendingPathComponent(name)
+    try run("/usr/bin/sips", ["-z", "\(pixels)", "\(pixels)", master.path, "--out", dest.path])
+}
+try run("/usr/bin/iconutil", ["-c", "icns", iconset.path, "-o", root.appendingPathComponent("AppIcon.icns").path])

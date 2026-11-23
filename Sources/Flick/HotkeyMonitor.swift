@@ -4,19 +4,17 @@ import Foundation
 
 final class HotkeyMonitor {
     private let handleInput: (SwitchingSession.Input) -> Bool
-    private(set) var isInstalled = false
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
+
+    var isInstalled: Bool { tap != nil }
 
     init(handleInput: @escaping (SwitchingSession.Input) -> Bool) {
         self.handleInput = handleInput
     }
 
     func start() {
-        guard tap == nil else {
-            isInstalled = true
-            return
-        }
+        guard tap == nil else { return }
         let mask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -26,7 +24,6 @@ final class HotkeyMonitor {
             callback: Self.callback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
-            isInstalled = false
             return
         }
 
@@ -36,7 +33,6 @@ final class HotkeyMonitor {
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
         _ = handleInput(.init(key: nil, flags: CGEventSource.flagsState(.combinedSessionState)))
-        isInstalled = true
     }
 
     private static let callback: CGEventTapCallBack = { _, type, event, userInfo in

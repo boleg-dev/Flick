@@ -20,7 +20,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let session = SwitchingSession(presentation: SwitcherOverlay())
     private lazy var hotkeys = HotkeyMonitor { [weak self] in self?.session.handle($0) ?? false }
     private var statusItem: NSStatusItem?
-    private var iconHasAccessibility: Bool?
     private var welcome: NSWindow?
     private var setupTimer: Timer?
 
@@ -33,10 +32,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         menu.delegate = self
         item.menu = menu
         statusItem = item
-        if let button = item.button {
-            button.imagePosition = .imageOnly
-            button.title = ""
-        }
 
         refreshPermissions()
         let needsWelcome = !permissions.accessibility || !UserDefaults.standard.bool(forKey: Keys.seenWelcome)
@@ -166,7 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             window.contentViewController = hosting
         } else {
             window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 440, height: 420),
+                contentRect: NSRect(x: 0, y: 0, width: WelcomeView.contentWidth, height: 420),
                 styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
                 backing: .buffered,
                 defer: false
@@ -188,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         DispatchQueue.main.async {
             let fit = hosting.view.fittingSize
             if fit.height > 120 {
-                window.setContentSize(NSSize(width: 440, height: fit.height))
+                window.setContentSize(NSSize(width: WelcomeView.contentWidth, height: fit.height))
                 window.center()
             }
         }
@@ -248,8 +243,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func updateStatusIcon() {
-        guard iconHasAccessibility != permissions.accessibility else { return }
-        iconHasAccessibility = permissions.accessibility
         let symbol = permissions.accessibility ? "square.on.square" : "exclamationmark.square"
         let base = NSImage(systemSymbolName: symbol, accessibilityDescription: "Flick")
         let image = base?.withSymbolConfiguration(.init(pointSize: 13, weight: .medium)) ?? base

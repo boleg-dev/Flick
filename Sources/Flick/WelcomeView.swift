@@ -2,6 +2,8 @@ import AppKit
 import SwiftUI
 
 struct WelcomeView: View {
+    static let contentWidth: CGFloat = 440
+
     @ObservedObject var model: PermissionModel
     var onAccessibility: () -> Void
     var onScreenRecording: () -> Void
@@ -60,7 +62,7 @@ struct WelcomeView: View {
             }
         }
         .padding(26)
-        .frame(width: 440)
+        .frame(width: Self.contentWidth)
     }
 
     private var accessibilityDetail: String {
