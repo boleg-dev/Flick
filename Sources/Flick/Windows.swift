@@ -9,14 +9,6 @@ struct WindowItem {
     let bounds: CGRect
     let bundleURL: URL?
 
-    var icon: NSImage {
-        if let bundleURL {
-            let image = NSWorkspace.shared.icon(forFile: bundleURL.path)
-            image.size = NSSize(width: 128, height: 128)
-            return image
-        }
-        return NSImage(named: NSImage.applicationIconName) ?? NSImage()
-    }
 }
 
 enum SwitchScope {

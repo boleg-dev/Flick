@@ -24,6 +24,15 @@ final class SwitcherOverlay: SwitchingPresentation {
     private var scrollBucket: CGFloat = 0
     private var mouseAtShow = NSPoint.zero
 
+    private var preparedPanel: OverlayPanel?
+
+    func prepareForFirstShow() {
+        guard let screen = NSScreen.main else { return }
+        let panel = OverlayPanel(frame: screen.frame)
+        panel.contentView = StageView()
+        preparedPanel = panel
+    }
+
     func show(items: [WindowItem], selection: Int, onAction: @escaping (SwitchingSession.Action) -> Void) -> Bool {
         let screens = NSScreen.screens
         guard let active = NSScreen.main ?? screens.first else { return false }
@@ -37,9 +46,12 @@ final class SwitcherOverlay: SwitchingPresentation {
         scrollBucket = 0
 
         for screen in screens {
-            let panel = OverlayPanel(frame: screen.frame)
+            let panel: OverlayPanel
             if screen.frame == active.frame {
-                let stage = StageView()
+                panel = preparedPanel ?? OverlayPanel(frame: screen.frame)
+                preparedPanel = nil
+                if panel.frame != screen.frame { panel.setFrame(screen.frame, display: false) }
+                let stage = panel.contentView as? StageView ?? StageView()
                 stage.onBackground = { onAction(.cancel) }
                 stage.onHover = { [weak self] index in self?.hover(index) }
                 stage.onClick = { onAction(.choose($0)) }
@@ -48,6 +60,7 @@ final class SwitcherOverlay: SwitchingPresentation {
                 panel.contentView = stage
                 self.stage = stage
             } else {
+                panel = OverlayPanel(frame: screen.frame)
                 let dim = DimView()
                 dim.onMouseDown = { onAction(.cancel) }
                 panel.contentView = dim
@@ -189,6 +202,8 @@ final class StageView: NSView {
     private let strip = NSView()
     private let hint = NSTextField(labelWithString: "")
     private let fade = CAGradientLayer()
+    private static let iconQueue = DispatchQueue(label: "dev.oleg.flick.icons", qos: .userInitiated)
+    private static let icons = NSCache<NSURL, NSImage>()
     private var cards: [CardView] = []
     private var selection = 0
     private var laidOutWidth: CGFloat = -1
@@ -251,21 +266,37 @@ final class StageView: NSView {
     func rebuild(items: [WindowItem], selection: Int, screenFrames: [CGRect]?, labels: (WindowItem) -> (String, String?)) {
         self.selection = selection
         cards.forEach { $0.removeFromSuperview() }
-        var icons: [pid_t: NSImage] = [:]
+        var missingIcons: [URL: [CardView]] = [:]
         cards = items.enumerated().map { index, item in
             let (title, subtitle) = labels(item)
             let card = CardView()
             card.bind(item: item, placement: screenFrames.flatMap { WindowPlacement(window: item.bounds, screens: $0) })
             card.setLabels(title: title, subtitle: subtitle)
-            let icon = icons[item.pid] ?? item.icon
-            icons[item.pid] = icon
-            card.setIcon(icon)
+            if let url = item.bundleURL {
+                if let icon = Self.icons.object(forKey: url as NSURL) {
+                    card.setIcon(icon)
+                } else {
+                    missingIcons[url, default: []].append(card)
+                }
+            } else if let icon = NSImage(named: NSImage.applicationIconName) {
+                card.setIcon(icon)
+            }
             card.setSelected(index == selection, animated: false)
             card.onHover = { [weak self] in self?.onHover?(index) }
             card.onClick = { [weak self] in self?.onClick?(index) }
             card.onScroll = { [weak self] event in self?.onScroll?(event) }
             strip.addSubview(card)
             return card
+        }
+        for (url, cards) in missingIcons {
+            Self.iconQueue.async { [weak self] in
+                let icon = NSWorkspace.shared.icon(forFile: url.path)
+                Self.icons.setObject(icon, forKey: url as NSURL)
+                DispatchQueue.main.async { [weak self] in
+                    guard self?.window?.isVisible == true else { return }
+                    for card in cards { card.setIcon(icon) }
+                }
+            }
         }
         hint.stringValue = items.isEmpty ? "No windows" : "Release ⌥ to switch    ·    esc cancels"
         laidOutWidth = -1

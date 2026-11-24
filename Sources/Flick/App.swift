@@ -17,7 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     static let shared = AppDelegate()
 
     private let permissions = PermissionModel()
-    private let session = SwitchingSession(presentation: SwitcherOverlay())
+    private let overlay = SwitcherOverlay()
+    private lazy var session = SwitchingSession(presentation: overlay)
     private lazy var hotkeys = HotkeyMonitor { [weak self] in self?.session.handle($0) ?? false }
     private var statusItem: NSStatusItem?
     private var welcome: NSWindow?
@@ -33,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         item.menu = menu
         statusItem = item
 
+        overlay.prepareForFirstShow()
         refreshPermissions()
         let needsWelcome = !permissions.accessibility || !UserDefaults.standard.bool(forKey: Keys.seenWelcome)
         if needsWelcome {
