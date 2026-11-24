@@ -2,6 +2,31 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Info.plist)
+tag="v$version"
+commit=$(git rev-parse HEAD)
+
+check_release_source() {
+  local changes current tagged
+  changes=$(git status --porcelain --untracked-files=all) || return 1
+  current=$(git rev-parse HEAD) || return 1
+  if [[ -n "$changes" || "$current" != "$commit" ]]; then
+    echo "Release builds require a clean working tree at the selected commit." >&2
+    return 1
+  fi
+  if tagged=$(git rev-parse --verify --quiet "refs/tags/$tag^{commit}"); then
+    if [[ "$tagged" != "$commit" ]]; then
+      echo "$tag points to a different commit." >&2
+      return 1
+    fi
+  else
+    echo "Release builds require HEAD to be tagged $tag." >&2
+    return 1
+  fi
+}
+
+check_release_source
+
 notary_auth=(--keychain-profile "${NOTARY_PROFILE:-DeveloperID-Notary}")
 if [[ -n "${NOTARY_KEYCHAIN:-}" ]]; then
   notary_auth+=(--keychain "$NOTARY_KEYCHAIN")
@@ -20,7 +45,6 @@ if [[ "$identity" != "Developer ID Application: "* ]]; then
   exit 1
 fi
 
-version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Info.plist)
 mkdir -p dist
 work=$(mktemp -d dist/.release.XXXXXXXX)
 trap 'rm -rf "$work"' EXIT
@@ -39,6 +63,7 @@ codesign --force --sign "$identity" --timestamp "$candidate"
 codesign --verify --strict "$candidate"
 hdiutil verify "$candidate"
 
+check_release_source
 echo "Submitting $candidate"
 xcrun notarytool submit "$candidate" "${notary_auth[@]}" --output-format plist > "$work/submission.plist"
 submission_id=$(/usr/libexec/PlistBuddy -c 'Print id' "$work/submission.plist")
