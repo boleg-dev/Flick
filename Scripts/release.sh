@@ -2,6 +2,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+if [[ $# -gt 1 || ($# -eq 1 && "$1" != --publish) ]]; then
+  echo "Usage: $0 [--publish]" >&2
+  exit 2
+fi
+publish=${1:-}
 version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Info.plist)
 tag="v$version"
 commit=$(git rev-parse HEAD)
@@ -19,13 +24,29 @@ check_release_source() {
       echo "$tag points to a different commit." >&2
       return 1
     fi
-  else
+  elif [[ "$publish" != --publish ]]; then
     echo "Release builds require HEAD to be tagged $tag." >&2
+    return 1
+  fi
+  [[ "$publish" == --publish ]] || return 0
+
+  local refs
+  refs=$(git ls-remote origin refs/heads/main "refs/tags/$tag") || return 1
+  if [[ "$refs" == *$'\t'"refs/tags/$tag"* ]]; then
+    echo "$tag already exists on origin. Choose a new version in Info.plist." >&2
+    return 1
+  fi
+  if [[ "$refs" != "$commit"$'\t'refs/heads/main ]]; then
+    echo "Publish from the commit currently on origin/main." >&2
     return 1
   fi
 }
 
 check_release_source
+if [[ "$publish" == --publish ]]; then
+  repo=$(gh repo view "$(git remote get-url origin)" --json nameWithOwner --jq .nameWithOwner)
+  swift test
+fi
 
 notary_auth=(--keychain-profile "${NOTARY_PROFILE:-DeveloperID-Notary}")
 if [[ -n "${NOTARY_KEYCHAIN:-}" ]]; then
@@ -81,3 +102,17 @@ xcrun stapler validate "$candidate"
 spctl --assess --type open --context context:primary-signature "$candidate"
 mv -f "$candidate" "dist/$dmg"
 echo "Ready to upload: dist/$dmg"
+
+if [[ "$publish" == --publish ]]; then
+  check_release_source
+  gh release create "$tag" "dist/$dmg" --repo "$repo" --target "$commit" \
+    --title "Flick $version" --generate-notes
+  local_hash=$(shasum -a 256 "dist/$dmg" | cut -d ' ' -f 1)
+  remote_digest=$(gh release view "$tag" --repo "$repo" --json assets \
+    --jq ".assets[] | select(.name == \"$dmg\") | .digest")
+  if [[ "$remote_digest" != "sha256:$local_hash" ]]; then
+    echo "Published asset checksum could not be verified." >&2
+    exit 1
+  fi
+  echo "Published and verified $dmg at https://github.com/$repo/releases/tag/$tag"
+fi
