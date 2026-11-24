@@ -22,12 +22,14 @@ APP="$output_dir/Flick.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$bin_dir/Flick" "$APP/Contents/MacOS/Flick"
-cp Info.plist "$APP/Contents/Info.plist"
+plist="$APP/Contents/Info.plist"
+cp Info.plist "$plist"
+bundle_id=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$plist")
 cp "$output_dir/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
-codesign --force --sign "$IDENTITY" --identifier "dev.oleg.flick" "${SIGNING_OPTIONS[@]}" \
+codesign --force --sign "$IDENTITY" --identifier "$bundle_id" "${SIGNING_OPTIONS[@]}" \
   "$APP/Contents/MacOS/Flick"
-codesign --force --sign "$IDENTITY" --identifier "dev.oleg.flick" "${SIGNING_OPTIONS[@]}" \
+codesign --force --sign "$IDENTITY" --identifier "$bundle_id" "${SIGNING_OPTIONS[@]}" \
   "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 
