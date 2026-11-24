@@ -46,6 +46,41 @@ Enable **Show Window Size & Position** in Flick’s menu to show each window’s
 
 *Rendered examples using sample window content.*
 
+## Build a release DMG
+
+With Xcode installed, save your notarization credentials in Keychain once using
+`xcrun notarytool store-credentials DeveloperID-Notary`. Then run:
+
+```sh
+./Scripts/release.sh
+```
+
+The script builds for Apple silicon and Intel, signs with Developer ID, submits
+the disk image to Apple, and staples and verifies the ticket. Upload the DMG
+printed at the end to GitHub Releases. If you have multiple Developer ID
+Application certificates, set `SIGNING_IDENTITY` to the certificate name.
+Set `NOTARY_PROFILE` to use a different Keychain profile.
+
+### Publish from GitHub Actions
+
+Create a GitHub Actions environment named `release` and add these secrets:
+
+| Secret | Value |
+| --- | --- |
+| `CERTIFICATE_P12_BASE64` | Base64 of the password-protected Developer ID Application certificate and private key exported together as a .p12 from Keychain Access |
+| `CERTIFICATE_PASSWORD` | Password used for that export |
+| `NOTARY_PRIVATE_KEY` | Full text of the App Store Connect team API key (.p8), including its header, footer, and line breaks |
+| `NOTARY_KEY_ID` | Key ID shown for that key |
+| `NOTARY_ISSUER_ID` | Issuer ID from the Team Keys page |
+
+On macOS, `base64 -i /path/to/signing.p12 | pbcopy` copies the encoded certificate
+for the secret. Store both private key files outside the checkout. Restrict who can
+push release tags or access the release environment.
+
+Push a tag matching the version in `Info.plist` (for example, `v1.0` for version
+`1.0`). The workflow runs the tests, signs and notarizes the universal DMG, and
+publishes a GitHub Release with the verified disk image attached.
+
 ## Support
 
 [Buy me a coffee](https://buymeacoffee.com/boleg)

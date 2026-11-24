@@ -13,15 +13,17 @@ if [[ "$IDENTITY" != "-" ]]; then
   fi
 fi
 
-swift Scripts/make-icon.swift Resources
-swift build -c release
+output_dir="${FLICK_BUILD_DIR:-.}"
+swift Scripts/make-icon.swift "$output_dir/Resources"
+swift build -c release "$@"
+bin_dir=$(swift build -c release "$@" --show-bin-path)
 
-APP="Flick.app"
+APP="$output_dir/Flick.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp .build/release/Flick "$APP/Contents/MacOS/Flick"
+cp "$bin_dir/Flick" "$APP/Contents/MacOS/Flick"
 cp Info.plist "$APP/Contents/Info.plist"
-cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp "$output_dir/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
 codesign --force --sign "$IDENTITY" --identifier "dev.oleg.flick" "${SIGNING_OPTIONS[@]}" \
   "$APP/Contents/MacOS/Flick"
