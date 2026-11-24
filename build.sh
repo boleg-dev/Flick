@@ -25,6 +25,8 @@ cp "$bin_dir/Flick" "$APP/Contents/MacOS/Flick"
 plist="$APP/Contents/Info.plist"
 cp Info.plist "$plist"
 bundle_id=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$plist")
+version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$plist")
+/usr/libexec/PlistBuddy -c "Add CFBundleVersion string $version" "$plist"
 cp "$output_dir/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
 codesign --force --sign "$IDENTITY" --identifier "$bundle_id" "${SIGNING_OPTIONS[@]}" \
