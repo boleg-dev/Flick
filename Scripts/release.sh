@@ -39,16 +39,16 @@ codesign --force --sign "$identity" --timestamp "$candidate"
 codesign --verify --strict "$candidate"
 hdiutil verify "$candidate"
 
-# Preserve the exact submitted file so an interrupted request can be resumed.
-mkdir -p dist/pending
-pending=$(mktemp -d dist/pending/submission.XXXXXXXX)
-mv "$candidate" "$pending/$dmg"
-candidate="$pending/$dmg"
 echo "Submitting $candidate"
-xcrun notarytool submit "$candidate" "${notary_auth[@]}" --wait --output-format plist > "$pending/result.plist"
-status=$(/usr/libexec/PlistBuddy -c 'Print status' "$pending/result.plist")
-if [[ "$status" != Accepted ]]; then
-  cat "$pending/result.plist" >&2
+xcrun notarytool submit "$candidate" "${notary_auth[@]}" --output-format plist > "$work/submission.plist"
+submission_id=$(/usr/libexec/PlistBuddy -c 'Print id' "$work/submission.plist")
+echo "Waiting for Apple notarization: $submission_id"
+wait_result=0
+xcrun notarytool wait "$submission_id" "${notary_auth[@]}" --output-format plist > "$work/result.plist" || wait_result=$?
+status=$(/usr/libexec/PlistBuddy -c 'Print status' "$work/result.plist" 2>/dev/null) || status=unknown
+if [[ $wait_result -ne 0 || "$status" != Accepted ]]; then
+  echo "Notarization did not complete successfully (submission $submission_id, status $status)." >&2
+  xcrun notarytool log "$submission_id" "${notary_auth[@]}" >&2 || echo "Apple's log is unavailable for submission $submission_id." >&2
   exit 1
 fi
 xcrun stapler staple "$candidate"
