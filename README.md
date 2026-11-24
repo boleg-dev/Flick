@@ -6,39 +6,23 @@
 
 <p align="center">A macOS window switcher with previews.</p>
 
-## Build and run
+## Install
 
-Requires macOS 14+ and Swift 5.9+. Install Xcode Command Line Tools with `xcode-select --install` if needed.
+Flick runs on Apple silicon and Intel Macs with macOS 14 or later.
 
-From the repository folder:
+1. Open the [latest Flick release](https://github.com/boleg-dev/Flick/releases/latest) and download the `.dmg` under **Assets**.
+2. Open the disk image, drag **Flick** to **Applications**, then open Flick from there.
+3. Follow Flick’s setup prompts. Allow **Accessibility** so Flick can handle the shortcut and focus the window you choose. Allow **Screen Recording** if you want window previews. Flick uses app icons when that permission is off. Reopen Flick if macOS asks.
 
-```sh
-./build.sh
-open Flick.app
-```
+Hold **Option**, press **Tab** until the window you want is highlighted, then release **Option** to switch. If another app uses Option + Tab, quit it to avoid shortcut conflicts.
 
-Move `Flick.app` to Applications to keep it installed. **Open at Login** is available in Flick’s menu.
+## Features
 
-## Setup
+- Switch between individual windows on your current desktop, including multiple windows from the same app. Minimized windows and hidden apps are excluded.
+- Hold **Option** and press **backtick** to cycle through just the current app’s windows.
+- Choose **Open at Login** in Flick’s menu to have it ready when you sign in.
 
-Grant **Accessibility** permission for shortcuts and window switching, and **Screen Recording** for previews. Without screen access, Flick shows app icons. Reopen Flick if macOS requests it.
-
-Quit other apps using Option + Tab to avoid shortcut conflicts.
-
-## Controls
-
-| Action | Control |
-| --- | --- |
-| Cycle through windows | Hold **Option**, press **Tab** |
-| Cycle backward | Add **Shift** |
-| Cycle within the current app | Hold **Option**, press **backtick** (`) |
-| Change selection | **Left / Right arrows**, scroll, or hover a card |
-| Switch to selection | Release **Option**, press **Return**, or click |
-| Cancel | **Escape** or click outside |
-
-Flick lists on-screen windows on the current desktop, excluding minimized windows and hidden apps.
-
-## Window size and position
+### Window size and position
 
 Enable **Show Window Size & Position** in Flick’s menu to show each window’s relative size and location on its display. Otherwise, the image fills the preview card.
 
@@ -46,9 +30,38 @@ Enable **Show Window Size & Position** in Flick’s menu to show each window’s
 
 *Rendered examples using sample window content.*
 
-## Build a release DMG
+### Controls
 
-With Xcode installed, save your notarization credentials in Keychain once using
+| Action | Control |
+| --- | --- |
+| Cycle through windows | Hold **Option**, press **Tab** |
+| Cycle backward | Add **Shift** |
+| Cycle within the current app | Hold **Option**, press **backtick** |
+| Change selection | **Left / Right arrows**, scroll, or hover a card |
+| Switch to selection | Release **Option**, press **Return**, or click |
+| Cancel | **Escape** or click outside |
+
+## Support
+
+[Buy me a coffee](https://buymeacoffee.com/boleg)
+
+## For developers
+
+### Build from source
+
+Install Xcode Command Line Tools with `xcode-select --install` if needed. Building requires Swift 5.9 or later. From the repository folder, run:
+
+```sh
+./build.sh
+open Flick.app
+```
+
+### Build a release DMG
+
+The build uses the numeric version in `Info.plist` for both the display version
+and the packaged `CFBundleVersion`. Increase it with every release.
+
+From a clean checkout at the matching version tag, save your notarization credentials in Keychain once using
 `xcrun notarytool store-credentials DeveloperID-Notary`. Then run:
 
 ```sh
@@ -60,6 +73,22 @@ the disk image to Apple, and staples and verifies the ticket. Upload the DMG
 printed at the end to GitHub Releases. If you have multiple Developer ID
 Application certificates, set `SIGNING_IDENTITY` to the certificate name.
 Set `NOTARY_PROFILE` to use a different Keychain profile.
+
+### Publish from your Mac
+
+For each new release, update the version in `Info.plist`, commit the changes,
+and push the commit to `origin/main`. With GitHub CLI authenticated for the
+repository, run:
+
+```sh
+./Scripts/release.sh --publish
+```
+
+This runs the tests, builds and notarizes the DMG with your Mac’s Keychain,
+then creates the version tag and GitHub Release and verifies the uploaded
+DMG’s SHA-256. Use a clean checkout and let the command create the tag. Pushing the tag yourself
+starts the hosted signing workflow. Local publishing needs no GitHub signing
+secrets. Running the script without arguments just builds the verified DMG.
 
 ### Publish from GitHub Actions
 
@@ -80,7 +109,3 @@ push release tags or access the release environment.
 Push a tag matching the version in `Info.plist` (for example, `v1.0` for version
 `1.0`). The workflow runs the tests, signs and notarizes the universal DMG, and
 publishes a GitHub Release with the verified disk image attached.
-
-## Support
-
-[Buy me a coffee](https://buymeacoffee.com/boleg)
