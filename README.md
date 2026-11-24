@@ -43,7 +43,7 @@ Enable **Show Window Size & Position** in Flick’s menu to show each window’s
 
 ## Support
 
-[Buy me a coffee](https://buymeacoffee.com/boleg)
+<a href="https://buymeacoffee.com/boleg"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" width="150"></a>
 
 ## For developers
 
