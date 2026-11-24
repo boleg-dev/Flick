@@ -21,6 +21,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private lazy var session = SwitchingSession(presentation: overlay)
     private lazy var hotkeys = HotkeyMonitor { [weak self] in self?.session.handle($0) ?? false }
     private var statusItem: NSStatusItem?
+    /// Nil until the button has shown the current permission, so a launch with Accessibility off still sets the warning icon.
+    private var displayedAccessibility: Bool?
     private var welcome: NSWindow?
     private var setupTimer: Timer?
 
@@ -33,6 +35,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         menu.delegate = self
         item.menu = menu
         statusItem = item
+        if let button = item.button {
+            button.imagePosition = .imageOnly
+            button.title = ""
+            button.toolTip = "Hold ⌥ and press Tab"
+        }
 
         overlay.prepareForFirstShow()
         refreshPermissions()
@@ -245,15 +252,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func updateStatusIcon() {
+        guard let button = statusItem?.button else { return }
+        guard displayedAccessibility != permissions.accessibility else { return }
+        displayedAccessibility = permissions.accessibility
         let symbol = permissions.accessibility ? "square.on.square" : "exclamationmark.square"
         let base = NSImage(systemSymbolName: symbol, accessibilityDescription: "Flick")
         let image = base?.withSymbolConfiguration(.init(pointSize: 13, weight: .medium)) ?? base
         image?.isTemplate = true
-        guard let button = statusItem?.button else { return }
         button.image = image
-        button.title = ""
-        button.imagePosition = .imageOnly
-        button.toolTip = "Hold ⌥ and press Tab"
     }
 
     private func installMainMenu() {

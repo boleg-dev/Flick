@@ -16,6 +16,10 @@ let package = Package(
                 .linkedFramework("ServiceManagement"),
             ]
         ),
-        .testTarget(name: "FlickTests", dependencies: ["Flick"])
+        .testTarget(
+            name: "FlickTests",
+            dependencies: ["Flick"],
+            linkerSettings: [.linkedFramework("Carbon")]
+        )
     ]
 )

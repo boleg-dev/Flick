@@ -146,6 +146,7 @@ enum WindowFocus {
             let title = axString(candidate, kAXTitleAttribute as CFString)
             let titleBonus: CGFloat = !wantedTitle.isEmpty && title == wantedTitle ? 50 : 0
             let score = distance(frame, window.bounds) - titleBonus
+            guard score.isFinite else { continue }
             if let best, score >= best.score { continue }
             best = (candidate, score)
         }

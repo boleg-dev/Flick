@@ -163,7 +163,7 @@ final class SwitchingSession {
     }
 }
 
-enum Key {
+private enum Key {
     static let tab: CGKeyCode = 48
     static let grave: CGKeyCode = 50
     static let escape: CGKeyCode = 53
